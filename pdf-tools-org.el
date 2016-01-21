@@ -62,6 +62,41 @@ need region."
           right1
           (- bottom1 (/ (- bottom1 top1) 3)))))
 
+(defun pdf-tools-org-export-plain-to-org ()
+  "Export annotations to an Org file.
+This version uses a basic format, more easily read by humans at the cost
+of dropping some of the detail captured in `pdf-tools-org-export-to-org."
+  (interactive)
+  (let ((annots (sort (pdf-annot-getannots) 'pdf-annot-compare-annotations))
+        (filename (format "%s.org"
+                          (file-name-sans-extension
+                           (buffer-name))))
+        (buffer (current-buffer)))
+    (with-temp-buffer
+      ;; org-set-property sometimes never returns if buffer not in org-mode
+      (org-mode)
+      (insert (concat "#+TITLE: Notes for " (file-name-sans-extension filename)))
+      (mapc
+       (lambda (annot) ;; traverse all annotations
+         (progn
+           (org-insert-heading-respect-content)
+           (insert (concat "Page " (number-to-string (pdf-annot-get annot 'page))))
+           ;; insert text from marked-up region in an org-mode quote
+           (when (pdf-annot-get annot 'markup-edges)
+             (insert (concat "\n** Source\n"
+                             (with-current-buffer buffer
+                               (pdf-info-gettext (pdf-annot-get annot 'page)
+                                                 (pdf-tools-org-edges-to-region
+                                                  (pdf-annot-get annot 'markup-edges)))))))
+           (insert (concat "\n\n** Comment\n" (pdf-annot-get annot
+                                                             'contents)))
+           (org-up-heading-safe)
+           (end-of-line)))
+       (cl-remove-if
+        (lambda (annot) (member (pdf-annot-get-type annot) pdf-tools-org-non-exportable-types))
+        annots))
+      (write-file filename pdf-tools-org-export-confirm-overwrite))))
+
 (defun pdf-tools-org-export-to-org ()
   "Export annotations to an Org file."
   (interactive)
